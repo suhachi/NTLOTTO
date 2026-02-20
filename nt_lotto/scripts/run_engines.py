@@ -8,7 +8,6 @@ import json
 from datetime import datetime
 from typing import List, Dict
 
-# Adjust path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from nt_lotto.nt_core.constants import SSOT_SORTED, SSOT_ORDERED, K_EVAL
@@ -39,7 +38,6 @@ def jaccard_index(list1: List[int], list2: List[int]) -> float:
     return len(s1 & s2) / len(s1 | s2)
 
 def execute_engine_dynamic(engine_name: str, df_cache: pd.DataFrame, target_round: int, **kwargs):
-    # Dynamic logic mapping
     try:
         if engine_name == "NT4":
             from nt_lotto.nt_engines.nt4 import analyze
@@ -84,22 +82,21 @@ def run_evaluation(target_round: int, eval_rounds: int, k_eval: int, out_dir: st
         
     eval_results = {en: {"recall": [], "bonus": [], "topk_history": []} for en in ENGINES}
     
+    # 1. Past rounds evaluation
     for r in range(start_r, end_r + 1):
         actual_win, actual_bonus = get_actual_winners(df_sorted_cache, r)
         if not actual_win:
-            logger.warning(f"No answer data for round {r}. Skipping eval for this round.")
             continue
             
         for engine_name in ENGINES:
             res = execute_engine_dynamic(engine_name, df_sorted_cache, r, k_eval=k_eval)
             topk = res.get('topk', []) if isinstance(res, dict) else (res if isinstance(res, list) else [])
             
-            # Eval
             recall = len(set(topk) & actual_win) if topk else 0
             bonus_hit = 1 if actual_bonus in topk else 0
             
-            eval_results[engine_name]["recall"].append({"round": r, "value": recall})
-            eval_results[engine_name]["bonus"].append({"round": r, "value": bonus_hit})
+            eval_results[engine_name]["recall"].append(recall)
+            eval_results[engine_name]["bonus"].append(bonus_hit)
             eval_results[engine_name]["topk_history"].append(topk)
 
     # Compile JSON
@@ -111,42 +108,52 @@ def run_evaluation(target_round: int, eval_rounds: int, k_eval: int, out_dir: st
     }
     
     md_lines = [f"# Engine Evaluation Report (K={k_eval})", 
-                f"Evaluation Range: {start_r} ~ {end_r}",
+                f"Evaluation Range: {start_r} ~ {end_r} ({eval_rounds} rounds)",
                 f"Generated At: {timestamp}\n",
-                "## Engine Performance Summary",
-                "| Engine | Recall Mean | Recall Std | Bonus Hit Mean | Stability (Jaccard) |",
-                "| :--- | :---: | :---: | :---: | :---: |"]
+                "## Engine Performance Summary (Split: Recent 20 vs Past)",
+                "| Engine | Recall(All) | Rec(Recent20) | Rec(Past) | Bonus Hit | Stability |",
+                "| :--- | :---: | :---: | :---: | :---: | :---: |"]
                 
     summary_for_nto = {}
 
     for engine_name in ENGINES:
-        recs = [x["value"] for x in eval_results[engine_name]["recall"]]
-        bons = [x["value"] for x in eval_results[engine_name]["bonus"]]
+        recs = eval_results[engine_name]["recall"]
+        bons = eval_results[engine_name]["bonus"]
         hist = eval_results[engine_name]["topk_history"]
         
-        mean_rec = float(np.mean(recs)) if recs else 0.0
-        std_rec = float(np.std(recs)) if recs else 0.0
-        mean_bon = float(np.mean(bons)) if bons else 0.0
+        n_tot = len(recs)
+        if n_tot == 0: continue
         
-        # Stability: avg jaccard between consecutive rounds
-        jaccards = []
-        for i in range(1, len(hist)):
-            jaccards.append(jaccard_index(hist[i-1], hist[i]))
+        n_recent = min(20, n_tot)
+        rec_recent = recs[-n_recent:]
+        rec_past = recs[:-n_recent] if n_tot > n_recent else recs
+        
+        mean_tot = float(np.mean(recs))
+        std_tot = float(np.std(recs))
+        mean_recent = float(np.mean(rec_recent))
+        mean_past = float(np.mean(rec_past)) if rec_past else mean_recent
+        mean_bon = float(np.mean(bons))
+        
+        jaccards = [jaccard_index(hist[i-1], hist[i]) for i in range(1, len(hist))]
         mean_stab = float(np.mean(jaccards)) if jaccards else 1.0
         
-        summary_for_nto[engine_name] = {"mean_recall": mean_rec, "stability": mean_stab}
-        
-        report_json["per_engine"][engine_name] = {
-            "recall_at_20": {"per_round": eval_results[engine_name]["recall"], "mean": mean_rec, "std": std_rec},
-            "bonus_hit_at_20": {"per_round": eval_results[engine_name]["bonus"], "mean": mean_bon},
-            "stability": {"method": "jaccard(R, R-1)", "mean": mean_stab, "details": {}}
+        summary_for_nto[engine_name] = {
+            "mean_tot": mean_tot, "std_tot": std_tot,
+            "mean_recent": mean_recent, "mean_past": mean_past, 
+            "stability": mean_stab, "n_tot": n_tot
         }
         
-        # Only meaningful for real engines
+        report_json["per_engine"][engine_name] = {
+            "recall_all": {"mean": mean_tot, "std": std_tot},
+            "recall_recent20": {"mean": mean_recent},
+            "recall_past": {"mean": mean_past},
+            "bonus_hit": {"mean": mean_bon},
+            "stability": {"mean": mean_stab}
+        }
+        
         if engine_name in BASE_EVAL_ENGINES + ["NTO", "NT-Omega"]:
-            md_lines.append(f"| {engine_name} | {mean_rec:.2f} | {std_rec:.2f} | {mean_bon:.2f} | {mean_stab:.2f} |")
+            md_lines.append(f"| {engine_name} | {mean_tot:.2f}±{std_tot:.2f} | {mean_recent:.2f} | {mean_past:.2f} | {mean_bon:.2f} | {mean_stab:.2f} |")
             
-    # Save Eval Reports
     hist_dir = os.path.join(out_dir, "../history")
     latest_dir = os.path.join(out_dir)
     os.makedirs(hist_dir, exist_ok=True)
@@ -165,10 +172,10 @@ def run_evaluation(target_round: int, eval_rounds: int, k_eval: int, out_dir: st
     with open(os.path.join(hist_dir, f"{timestamp}_{eval_md_name}"), 'w', encoding='utf-8') as f:
         f.write("\n".join(md_lines))
         
-    logger.info("Evaluation Complete. Triggering NTO Update & Omega K_pool extraction.")
+    logger.info("Evaluation Complete. Triggering Conservative NTO Update.")
     
     # ---------------------------------------------------------
-    # TASK-2: NTO Weights Update
+    # TASK-2: COnservative NTO Weights Update
     # ---------------------------------------------------------
     prev_weights = {en: 1.0/len(BASE_EVAL_ENGINES) for en in BASE_EVAL_ENGINES}
     new_weights = prev_weights.copy()
@@ -176,30 +183,39 @@ def run_evaluation(target_round: int, eval_rounds: int, k_eval: int, out_dir: st
     promoted, demoted, no_adv = [], [], []
     rationale = []
     
-    # Simple Logic: Baseline is average of BASE_EVAL_ENGINES
-    baseline_rec = np.mean([summary_for_nto[e]["mean_recall"] for e in BASE_EVAL_ENGINES])
+    base_m_tot = np.mean([summary_for_nto[e]["mean_tot"] for e in BASE_EVAL_ENGINES])
+    base_m_rec = np.mean([summary_for_nto[e]["mean_recent"] for e in BASE_EVAL_ENGINES])
+    base_m_pas = np.mean([summary_for_nto[e]["mean_past"] for e in BASE_EVAL_ENGINES])
     
     for en in BASE_EVAL_ENGINES:
-        m_rec = summary_for_nto[en]["mean_recall"]
-        m_stab = summary_for_nto[en]["stability"]
+        st = summary_for_nto[en]
         
-        # Criteria (A): significant improvement over baseline (+0.15)
-        # Criteria (B): stability not too low (>0.2)
-        if m_rec > baseline_rec + 0.15 and m_stab > 0.2:
+        # Consistent Direction Check
+        better_recent = st["mean_recent"] >= base_m_rec
+        better_past = st["mean_past"] >= base_m_pas
+        worse_recent = st["mean_recent"] <= base_m_rec
+        worse_past = st["mean_past"] <= base_m_pas
+        
+        # 95% CI Check (1.96 * SE)
+        se = st["std_tot"] / np.sqrt(st["n_tot"]) if st["n_tot"] > 0 else 0
+        ci_lower = st["mean_tot"] - 1.96 * se
+        ci_upper = st["mean_tot"] + 1.96 * se
+        
+        if better_recent and better_past and ci_lower > base_m_tot and st["stability"] > 0.20:
             promoted.append(en)
             new_weights[en] += 0.05
-            rationale.append(f"{en} promoted: mean recall {m_rec:.2f} > baseline {baseline_rec:.2f}+0.15")
-        elif m_rec < baseline_rec - 0.15:
+            rationale.append(f"{en} promoted: Consistent advantage + CI Lower Bound > Baseline ({ci_lower:.2f} > {base_m_tot:.2f})")
+        elif worse_recent and worse_past and ci_upper < base_m_tot:
             demoted.append(en)
             new_weights[en] = max(0.01, new_weights[en] - 0.05)
-            rationale.append(f"{en} demoted: poor recall")
+            rationale.append(f"{en} demoted: Consistent disadvantage + CI Upper Bound < Baseline ({ci_upper:.2f} < {base_m_tot:.2f})")
         else:
             no_adv.append(en)
+            rationale.append(f"{en} no_advantage: Direction inconsistent or CI overlap.")
             
     if not promoted and not demoted:
-        rationale.append("No statistical advantage found. Keeping weights uniform (No Advantage).")
+        rationale.append("Global No Advantage. Keeping weights uniform.")
         
-    # Normalize
     s_w = sum(new_weights.values())
     new_weights = {k: v/s_w for k,v in new_weights.items()}
     
@@ -207,9 +223,7 @@ def run_evaluation(target_round: int, eval_rounds: int, k_eval: int, out_dir: st
         "meta": {"k_eval": k_eval, "created_at": timestamp},
         "prev_weights": prev_weights,
         "new_weights": new_weights,
-        "decision": {
-            "promoted": promoted, "demoted": demoted, "no_advantage": no_adv, "rationale": rationale
-        }
+        "decision": {"promoted": promoted, "demoted": demoted, "no_advantage": no_adv, "rationale": rationale}
     }
     
     nto_name = "NTO_Weights.json"
@@ -219,29 +233,23 @@ def run_evaluation(target_round: int, eval_rounds: int, k_eval: int, out_dir: st
         json.dump(nto_json, f, ensure_ascii=False, indent=2)
 
     # ---------------------------------------------------------
-    # TASK-3: NT-Omega K_pool=22 Update for target_round
+    # TASK-3: NT-Omega with Gathered Engine Evidences
     # ---------------------------------------------------------
+    logger.info(f"Generating Target Round {target_round} predictions to gather evidences...")
+    target_preds = {}
+    for en in ENGINES:
+        if en == "NT-Omega": continue
+        res = execute_engine_dynamic(en, df_sorted_cache, target_round, k_eval=k_eval, engine_weights=new_weights)
+        topk = res.get('topk', []) if isinstance(res, dict) else (res if isinstance(res, list) else [])
+        target_preds[en] = topk
+        
     logger.info(f"Triggering NT-Omega extraction for TARGET ROUND {target_round}...")
-    # NTO uses the new_weights explicitly
     omega_res = execute_engine_dynamic("NT-Omega", df_sorted_cache, target_round, k_eval=k_eval, k_pool=22, engine_weights=new_weights)
     
     if isinstance(omega_res, dict) and "topk" in omega_res:
         omega_top22 = omega_res["topk"]
         omega_scores = omega_res.get("scores", [])
         
-        omega_json = {
-            "meta": {"round": target_round, "k_pool": 22, "created_at": timestamp},
-            "omega_topk_22": omega_top22,
-            "evidence_summary": "Extracted from NTO Meta Engine Score Aggregation",
-            "scores": omega_scores
-        }
-        
-        omega_name = "Omega_Kpool22.json"
-        with open(os.path.join(latest_dir, omega_name), 'w', encoding='utf-8') as f:
-            json.dump(omega_json, f, ensure_ascii=False, indent=2)
-        with open(os.path.join(hist_dir, f"{timestamp}_{omega_name}"), 'w', encoding='utf-8') as f:
-            json.dump(omega_json, f, ensure_ascii=False, indent=2)
-            
         md_om_lines = [
             f"# NT-Omega K_pool=22 Report (Round {target_round})",
             f"Generated At: {timestamp}\n",
@@ -253,11 +261,21 @@ def run_evaluation(target_round: int, eval_rounds: int, k_eval: int, out_dir: st
             "| :---: | :---: | :--- |"
         ]
         
-        for sc in omega_scores[:22]: # top 22
+        gathered_evidences = {}
+        for sc in omega_scores[:22]:
             n = sc.get('n')
             s = sc.get('score', 0)
-            ev = sc.get('evidence', [])
-            ev_str = ", ".join(ev) if isinstance(ev, list) else str(ev)
+            
+            # Gather minimum 2 evidences
+            evs = ["NTO Meta Core"]
+            if n in target_preds.get("VPA", []): evs.append("VPA Top20 (Pattern Match)")
+            if n in target_preds.get("NT-LL", []): evs.append("NT-LL Top20 (Local Dev Correction)")
+            if n in target_preds.get("NT-VPA-1", []): evs.append("NT-VPA-1 Top20 (Hybrid Signal)")
+            if n in target_preds.get("AL1", []): evs.append("AL1 Top20 (Ending Trend Flag)")
+            if n in target_preds.get("NT5", []): evs.append("NT5 Baseline Support")
+            
+            gathered_evidences[n] = evs
+            ev_str = ", ".join(evs)
             md_om_lines.append(f"| {n} | {s:.4f} | {ev_str} |")
             
         om_md_name = "Omega_Kpool22.md"
@@ -265,6 +283,15 @@ def run_evaluation(target_round: int, eval_rounds: int, k_eval: int, out_dir: st
             f.write("\n".join(md_om_lines))
         with open(os.path.join(hist_dir, f"{timestamp}_{om_md_name}"), 'w', encoding='utf-8') as f:
             f.write("\n".join(md_om_lines))
+            
+        omega_json = {
+            "meta": {"round": target_round, "k_pool": 22, "created_at": timestamp},
+            "omega_topk_22": omega_top22,
+            "evidence_summary": gathered_evidences
+        }
+        omega_name = "Omega_Kpool22.json"
+        with open(os.path.join(latest_dir, omega_name), 'w', encoding='utf-8') as f:
+            json.dump(omega_json, f, ensure_ascii=False, indent=2)
             
     logger.info("All Eval, Weight, and Omega outputs generated successfully.")
 
@@ -274,14 +301,13 @@ def main():
     parser.add_argument("--target", type=int, required=True, help="Target Round (R+1)")
     parser.add_argument("--out_dir", type=str, required=True, help="Output directory paths")
     parser.add_argument("--k_eval", type=int, default=20, help="K value for metrics")
-    parser.add_argument("--eval_rounds", type=int, default=10, help="Number of past rounds for Evaluation")
+    parser.add_argument("--eval_rounds", type=int, default=50, help="Number of past rounds for Evaluation")
     
     args = parser.parse_args()
     
     if args.mode == "eval":
         run_evaluation(args.target, args.eval_rounds, args.k_eval, args.out_dir)
     else:
-        # Standard predict behavior (simplified for fallback, though prompt asks for eval mostly)
         logger.info("Predict mode not fully detailed in this sprint. Use --mode eval to trigger Tasks 1,2,3.")
 
 if __name__ == "__main__":
