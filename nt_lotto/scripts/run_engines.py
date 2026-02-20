@@ -24,6 +24,9 @@ ENGINES = [
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger("EngineRunner")
 
+# Global Cache
+df_sorted_cache = None
+
 def get_engine_stub_prediction(engine_name: str, target_round: int) -> List[int]:
     """
     Simulates engine prediction.
@@ -62,6 +65,13 @@ def main():
     
     logger.info(f"Running Engines for Target Round {target_round}...")
     
+    # 0. Global Cache & Data Loader
+    global df_sorted_cache
+    from nt_lotto.nt_core.ssot_loader import load_data
+    
+    if df_sorted_cache is None:
+        df_sorted_cache, _ = load_data(exclusion_mode=True)
+    
     # Structure to hold results
     engine_results = []
     
@@ -73,40 +83,20 @@ def main():
         try:
             if engine_name == "NT4":
                 from nt_lotto.nt_engines.nt4 import analyze as analyze_nt4
-                # Need to load SSOT here or pass it?
-                # The prompt implies run_engines might handle data loading or engines load it.
-                # Since SSOT is distinct, let's load it once at the top of main if possible,
-                # but to avoid overhead for stubs, we might load it inside.
-                # However, for efficiency, load once.
-                
-                # Check if 'ssot_sorted' is available. 
-                # We need to import loader.
-                from nt_lotto.nt_core.ssot_loader import load_data
-                if 'df_sorted_cache' not in globals():
-                    global df_sorted_cache
-                    df_sorted_cache, _ = load_data(exclusion_mode=True)
-                
                 prediction = analyze_nt4(df_sorted_cache, target_round)
             elif engine_name == "NT5":
                 from nt_lotto.nt_engines.nt5 import analyze as analyze_nt5
-                from nt_lotto.nt_core.ssot_loader import load_data
-                if 'df_sorted_cache' not in globals():
-                    global df_sorted_cache
-                    df_sorted_cache, _ = load_data(exclusion_mode=True)
-                
                 prediction = analyze_nt5(df_sorted_cache, target_round)
             elif engine_name == "NT-LL":
                 from nt_lotto.nt_engines.nt_ll import analyze as analyze_ntll
-                from nt_lotto.nt_core.ssot_loader import load_data
-                if 'df_sorted_cache' not in globals():
-                    global df_sorted_cache
-                    df_sorted_cache, _ = load_data(exclusion_mode=True)
-                prediction = analyze_ntll(df_sorted_cache, target_round)
+                result = analyze_ntll(df_sorted_cache, target_round)
+                prediction = result['topk'] if isinstance(result, dict) else result
             else:
                 prediction = get_engine_stub_prediction(engine_name, target_round)
         except Exception as e:
             logger.error(f"Error executing {engine_name}: {e}")
             prediction = []
+
 
         # 2. Validation (Length check)
         if len(prediction) > 0:

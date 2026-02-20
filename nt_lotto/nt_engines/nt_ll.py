@@ -9,47 +9,91 @@ Input: ssot_sorted.csv
 Output: TopK(20) candidates
 """
 
-def analyze(df_sorted: pd.DataFrame, target_round: int) -> list[int]:
-    """
-    NT-LL Logic
-    - For each number n (1~45):
-        1. Compute global frequency (전체 빈도)
-        2. Compute local frequency (최근 10회)
-        3. Deviation = local - global (정규화)
-        4. Correction: score = -|Deviation| (편차가 작을수록 점수 높음)
-        5. Optionally, apply mild boost for numbers with local > global (상승세)
-    - Deterministic: Score DESC, Number ASC
-    """
-    # 1. Filter Data (Use only past data)
-    history = df_sorted[df_sorted['round'] < target_round]
-    if history.empty:
-        return []
+B_UNDER = 1.0
+B_OVER = 0.8
+W_SIZE = 20
 
-    def get_freq(data, rounds=None):
-        if rounds:
-            data = data.tail(rounds)
-        vals = data.iloc[:, 1:7].values.flatten()
+def analyze(df_sorted: pd.DataFrame, round_r: int, *, k_eval: int = 20, **kwargs) -> dict:
+    """
+    NT-LL (Local Linear / Low-Lag Adjustment)
+    
+    Formula:
+    fg(n) = (count_global(n) + 1) / (6 * len(H) + 45)
+    fr(n) = (count_recent(n) + 1) / (6 * W + 45)
+    dev(n) = norm(fr(n)) - norm(fg(n))
+    score(n) = b_under * max(-dev(n), 0) - b_over * max(dev(n), 0)
+    """
+    
+    # 1. Look-ahead Prevention
+    df_past = df_sorted[df_sorted['round'] < round_r].copy()
+    if df_past.empty:
+        return {
+            "engine": "NT-LL", "round": round_r, "k_eval": k_eval,
+            "params": {"W": W_SIZE, "b_under": B_UNDER, "b_over": B_OVER},
+            "scores": [], "topk": []
+        }
+
+    # 2. Get counts (Numbers 1-45)
+    def get_counts(df):
+        vals = df.iloc[:, 1:7].values.flatten()
         return pd.Series(vals).value_counts().reindex(range(1, 46), fill_value=0)
 
-    global_freq = get_freq(history)
-    local_freq = get_freq(history, 10)
-
-    # Normalize (MinMax)
+    count_g = get_counts(df_past)
+    recent_window = df_past.tail(W_SIZE)
+    count_r = get_counts(recent_window)
+    
+    total_g = len(df_past)
+    total_r = len(recent_window)
+    
+    # 3. Laplace Smoothing
+    fg = (count_g + 1) / (6 * total_g + 45)
+    fr = (count_r + 1) / (6 * total_r + 45)
+    
+    # 4. Normalization (MinMax)
     def normalize(s):
-        if s.max() == s.min():
-            return s * 0.0
-        return (s - s.min()) / (s.max() - s.min())
+        s_min, s_max = s.min(), s.max()
+        if s_max - s_min < 1e-12:
+            return pd.Series(0.5, index=s.index)
+        return (s - s_min) / (s_max - s_min + 1e-12)
+    
+    norm_g = normalize(fg)
+    norm_r = normalize(fr)
+    
+    # 5. Deviation and Score
+    dev = norm_r - norm_g
+    
+    scores_raw = {}
+    for n in range(1, 46):
+        d = dev[n]
+        if d < 0:
+            s = B_UNDER * (-d)
+        else:
+            s = -B_OVER * d
+        scores_raw[n] = float(s)
+        
+    # 6. Final Result Construction
+    results = []
+    for n in range(1, 46):
+        results.append({
+            "n": n,
+            "score": scores_raw[n],
+            "dev": float(dev[n]),
+            "f_recent": float(fr[n]),
+            "f_prev": float(fg[n]) # 'f_prev' as used in spec for global/prior
+        })
+    
+    # Tie-break: Score DESC, Number ASC
+    # Sorting is done for the topk selection and also the returned scores list
+    results.sort(key=lambda x: (-x['score'], x['n']))
+    
+    topk = [r['n'] for r in results[:k_eval]]
+    
+    return {
+        "engine": "NT-LL",
+        "round": round_r,
+        "k_eval": k_eval,
+        "params": {"W": W_SIZE, "b_under": B_UNDER, "b_over": B_OVER},
+        "scores": results,
+        "topk": topk
+    }
 
-    norm_global = normalize(global_freq)
-    norm_local = normalize(local_freq)
-
-    deviation = norm_local - norm_global
-    # Correction: 편차가 작을수록(0에 가까울수록) 점수 높음
-    correction_score = -np.abs(deviation)
-    # 상승세 보정: local > global인 경우 +0.05 가산
-    correction_score += (deviation > 0).astype(float) * 0.05
-
-    scores = pd.DataFrame({'score': correction_score})
-    scores['number'] = scores.index
-    scores = scores.sort_values(by=['score', 'number'], ascending=[False, True])
-    return scores.head(20)['number'].tolist()

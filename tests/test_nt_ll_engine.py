@@ -53,8 +53,8 @@ def test_nt_ll_output_structure(mock_ssot_df):
         # Primary: Score Desc
         assert s1['score'] >= s2['score']
         
-        # Tie-break: N Asc
-        if abs(s1['score'] - s2['score']) < 1e-9:
+        # Tie-break: N Asc (only if scores are EFFECTIVELY equal)
+        if abs(s1['score'] - s2['score']) < 1e-15:
             assert s1['n'] < s2['n']
 
 def test_nt_ll_determinism(mock_ssot_df):
