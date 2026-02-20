@@ -1,0 +1,4 @@
+- The user prefers that when they request it, the assistant generates a text file for GPT to analyze. (ID: 6703186)
+- This project uses pnpm as the package manager, removes package-lock.json and yarn.lock, and configures VSCode settings.json with "npm.packageManager": "pnpm". (ID: 6703178)
+- The "Super Engine" (NT-Ω) was evaluated as theoretically perfect (scoring highest on 3-Law criteria) but underperformed in the specific 1200th draw due to overfitting to statistical averages, failing to capture the "outlier" pattern (1, 2, 4 start).
+- The 3-Law system is justified by this evaluation: Law 2 inherits the Super Engine's statistical logic, while Law 3 (Shape) is necessary to capture the anomalies that the Super Engine filters out.

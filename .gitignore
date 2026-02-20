@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.csv
+*.json
+temp_output/
+99_Warehouse_Legacy/
+__pycache__/
+*.pyc
+
+# User home directories (exclude everything above current dir)
+../../../.antigravity/
+../../../.boto/
+../../../.cache/
+../../../.cargo/
+../../../.config/
+../../../.copilot/
+../../../.cursor/
+../../../.env
+../../../.gemini/
+../../../.gsutil/
+../../../.keras/
+../../../.rustup/
+../../../.streamlit/
+../../../.vscode/
+../../../AppData/
