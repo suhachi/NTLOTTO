@@ -13,14 +13,9 @@ def analyze(df_sorted: pd.DataFrame, round_r: int, *, k_eval: int = 20, **kwargs
     # Target active engines
     active_engine_names = ["NT4", "NT5", "NT-LL", "VPA", "NT-VPA-1"]
     
-    # 1. Gather scores from engines
-    from nt_lotto.scripts.run_engines import get_engine_stub_prediction
     engine_score_maps = {}
     
     # To prevent circular imports or huge overhead, we dynamically import the exact functions
-    # Because evaluate/run_engines is already heavily patched, we replicate the load here
-    # or rely on registry if it returns actual functions.
-    # Currently registry returning functions is a bit hacky, let's import directly.
     import importlib
     
     df_past = df_sorted[df_sorted['round'] < round_r].copy()
@@ -36,8 +31,11 @@ def analyze(df_sorted: pd.DataFrame, round_r: int, *, k_eval: int = 20, **kwargs
                 # Expecting score list of dicts: [{'n': 1, 'score': 0.8}, ...]
                 s_map = {item['n']: item['score'] for item in result['scores']}
                 engine_score_maps[en_name] = s_map
+            elif isinstance(result, list):
+                # Rank-based score for stub/list outputs (e.g., NT4, NT5)
+                s_map = {n: float(len(result) - i) / len(result) for i, n in enumerate(result)}
+                engine_score_maps[en_name] = s_map
         except Exception as e:
-            # Fallback or stub
             pass
 
     # 2. Score Aggregation (Weighted Sum)

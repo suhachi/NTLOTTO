@@ -52,11 +52,15 @@ def analyze(df_sorted: pd.DataFrame, round_r: int, *, k_eval: int = 20, **kwargs
     
     vals = df_past[['n1', 'n2', 'n3', 'n4', 'n5', 'n6']].values.flatten()
     for v in vals:
-        if 1 <= v <= 45:
-            global_counts[v] += 1
-            global_bands[get_band(v)] += 1
-            global_endings[get_ending(v)] += 1
-            global_eo[get_even_odd(v)] += 1
+        try:
+            v_int = int(float(v))
+            if 1 <= v_int <= 45:
+                global_counts[v_int] += 1
+                global_bands[get_band(v_int)] += 1
+                global_endings[get_ending(v_int)] += 1
+                global_eo[get_even_odd(v_int)] += 1
+        except (ValueError, TypeError):
+            pass
             
     # Smoothing / Expected Ratios
     def expected_ratio(count, total_count, options):
@@ -89,19 +93,26 @@ def analyze(df_sorted: pd.DataFrame, round_r: int, *, k_eval: int = 20, **kwargs
         # Pair co-occurrence matrix for window
         pair_matrix = np.zeros((46, 46))
         for _, row in recent.iterrows():
-            nums = row.iloc[1:7].values
+            nums = row[['n1', 'n2', 'n3', 'n4', 'n5', 'n6']].values
             for i in range(len(nums)):
                 for j in range(i+1, len(nums)):
-                    u, v = nums[i], nums[j]
-                    if 1 <= u <= 45 and 1 <= v <= 45:
-                        pair_matrix[u][v] += 1
-                        pair_matrix[v][u] += 1
+                    try:
+                        u, v = int(float(nums[i])), int(float(nums[j]))
+                        if 1 <= u <= 45 and 1 <= v <= 45:
+                            pair_matrix[u][v] += 1
+                            pair_matrix[v][u] += 1
+                    except (ValueError, TypeError):
+                        pass
         
         for v in r_vals:
-            if 1 <= v <= 45:
-                r_bands[get_band(v)] += 1
-                r_endings[get_ending(v)] += 1
-                r_eo[get_even_odd(v)] += 1
+            try:
+                v_int = int(float(v))
+                if 1 <= v_int <= 45:
+                    r_bands[get_band(v_int)] += 1
+                    r_endings[get_ending(v_int)] += 1
+                    r_eo[get_even_odd(v_int)] += 1
+            except (ValueError, TypeError):
+                pass
                 
         p_band_obs = {b: expected_ratio(r_bands[b], r_total, 5) for b in r_bands}
         p_end_obs = {e: expected_ratio(r_endings[e], r_total, 10) for e in r_endings}
