@@ -38,7 +38,7 @@ def analyze(df_sorted: pd.DataFrame, round_r: int, *, k_eval: int = 20, **kwargs
 
     # 2. Get counts (Numbers 1-45)
     def get_counts(df):
-        vals = df[['n1', 'n2', 'n3', 'n4', 'n5', 'n6']].values.flatten()
+        vals = df.iloc[:, 1:7].values.flatten()
         return pd.Series(vals).value_counts().reindex(range(1, 46), fill_value=0)
 
     count_g = get_counts(df_past)
