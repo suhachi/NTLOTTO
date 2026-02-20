@@ -71,6 +71,16 @@ def main():
     
     if df_sorted_cache is None:
         df_sorted_cache, _ = load_data(exclusion_mode=True)
+        
+    import json
+    from datetime import datetime
+    
+    timestamp = datetime.now().strftime("%Y%md_%H%M")
+    report_data = {
+        "target_round": target_round,
+        "timestamp": timestamp,
+        "engines": {}
+    }
     
     # Structure to hold results
     engine_results = []
@@ -80,31 +90,55 @@ def main():
         
         # 1. Execute Engine Logic
         prediction = []
+        diagnostics = {}
+        
         try:
             if engine_name == "NT4":
-                from nt_lotto.nt_engines.nt4 import analyze as analyze_nt4
-                prediction = analyze_nt4(df_sorted_cache, target_round)
+                from nt_lotto.nt_engines.nt4 import analyze
+                res = analyze(df_sorted_cache, target_round)
             elif engine_name == "NT5":
-                from nt_lotto.nt_engines.nt5 import analyze as analyze_nt5
-                prediction = analyze_nt5(df_sorted_cache, target_round)
+                from nt_lotto.nt_engines.nt5 import analyze
+                res = analyze(df_sorted_cache, target_round)
             elif engine_name == "NT-LL":
-                from nt_lotto.nt_engines.nt_ll import analyze as analyze_ntll
-                result = analyze_ntll(df_sorted_cache, target_round)
-                prediction = result['topk'] if isinstance(result, dict) else result
+                from nt_lotto.nt_engines.nt_ll import analyze
+                res = analyze(df_sorted_cache, target_round)
+            elif engine_name == "VPA":
+                from nt_lotto.nt_engines.vpa import analyze
+                res = analyze(df_sorted_cache, target_round)
+            elif engine_name == "NT-VPA-1":
+                from nt_lotto.nt_engines.nt_vpa_1 import analyze
+                res = analyze(df_sorted_cache, target_round)
+            elif engine_name == "NTO":
+                from nt_lotto.nt_engines.nto import analyze
+                res = analyze(df_sorted_cache, target_round)
+            elif engine_name == "NT-Omega":
+                from nt_lotto.nt_engines.nt_omega import analyze
+                res = analyze(df_sorted_cache, target_round)
+            elif engine_name in ["AL1", "AL2", "ALX"]:
+                from nt_lotto.nt_engines.al_engines import analyze
+                res = analyze(engine_name, df_sorted_cache, target_round)
+            elif engine_name in ["NT-EXP", "NT-DPP", "NT-HCE", "NT-PAT"]:
+                from nt_lotto.nt_engines.diagnostic_stubs import analyze
+                res = analyze(engine_name, df_sorted_cache, target_round)
             else:
-                prediction = get_engine_stub_prediction(engine_name, target_round)
+                res = get_engine_stub_prediction(engine_name, target_round)
+                
+            prediction = res['topk'] if isinstance(res, dict) and 'topk' in res else (res if isinstance(res, list) else [])
+            diagnostics = res.get('diagnostics', {}) if isinstance(res, dict) else {}
+            
+            # Extract engine params and evidence for reporting
+            report_data["engines"][engine_name] = {
+                "topk": prediction,
+                "diagnostics": diagnostics,
+                "params": res.get("params", {}) if isinstance(res, dict) else {}
+            }
+            
         except Exception as e:
             logger.error(f"Error executing {engine_name}: {e}")
             prediction = []
+            report_data["engines"][engine_name] = {"error": str(e)}
 
-
-        # 2. Validation (Length check)
-        if len(prediction) > 0:
-            # Check K
-            pass
-            
         # 3. Store Result
-        # Format for engine_topk_K20.csv: engine_id, numbers (list)
         engine_results.append({
             "engine_id": engine_name,
             "numbers": prediction
@@ -112,9 +146,47 @@ def main():
         
     # Save to CSV
     out_csv = os.path.join(out_dir, "engine_topk_K20.csv")
-    df = pd.DataFrame(engine_results)
-    df.to_csv(out_csv, index=False)
+    pd.DataFrame(engine_results).to_csv(out_csv, index=False)
     logger.info(f"Saved engine results to {out_csv}")
+    
+    # Save JSON Report
+    latest_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../docs/reports/latest'))
+    history_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../docs/reports/history'))
+    os.makedirs(latest_dir, exist_ok=True)
+    os.makedirs(history_dir, exist_ok=True)
+    
+    json_name = f"Round_{target_round}_Evaluation.json"
+    dict_out = report_data
+    
+    with open(os.path.join(history_dir, f"{timestamp}_{json_name}"), 'w', encoding='utf-8') as f:
+        json.dump(dict_out, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(latest_dir, json_name), 'w', encoding='utf-8') as f:
+        json.dump(dict_out, f, ensure_ascii=False, indent=2)
+        
+    # Save MD Report
+    md_name = f"Round_{target_round}_Evaluation_Report.md"
+    md_lines = [f"# Evaluation Report (Round {target_round})", f"Generated: {timestamp}\n"]
+    
+    for en, data in report_data["engines"].items():
+        md_lines.append(f"## {en}")
+        if "error" in data:
+            md_lines.append(f"**Error**: {data['error']}\n")
+            continue
+            
+        md_lines.append(f"- **TopK**: {data.get('topk', [])}")
+        diag = data.get('diagnostics', {})
+        if diag:
+            md_lines.append(f"- **Diagnostics**: {diag}")
+        md_lines.append("")
+        
+    md_content = "\n".join(md_lines)
+    
+    with open(os.path.join(history_dir, f"{timestamp}_{md_name}"), 'w', encoding='utf-8') as f:
+        f.write(md_content)
+    with open(os.path.join(latest_dir, md_name), 'w', encoding='utf-8') as f:
+        f.write(md_content)
+        
+    logger.info(f"Generated evaluation reports in docs/reports/latest/")
 
 if __name__ == "__main__":
     main()

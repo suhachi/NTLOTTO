@@ -26,6 +26,9 @@ def analyze(df_sorted: pd.DataFrame, round_r: int, *, k_eval: int = 20, **kwargs
     
     # 1. Look-ahead Prevention
     df_past = df_sorted[df_sorted['round'] < round_r].copy()
+    if not df_past.empty:
+        assert df_past['round'].max() < round_r, "Look-ahead detected in NT-LL window slicing"
+        
     if df_past.empty:
         return {
             "engine": "NT-LL", "round": round_r, "k_eval": k_eval,
@@ -35,7 +38,7 @@ def analyze(df_sorted: pd.DataFrame, round_r: int, *, k_eval: int = 20, **kwargs
 
     # 2. Get counts (Numbers 1-45)
     def get_counts(df):
-        vals = df.iloc[:, 1:7].values.flatten()
+        vals = df[['n1', 'n2', 'n3', 'n4', 'n5', 'n6']].values.flatten()
         return pd.Series(vals).value_counts().reindex(range(1, 46), fill_value=0)
 
     count_g = get_counts(df_past)

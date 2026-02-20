@@ -19,12 +19,14 @@ def get_engines() -> List[EngineBase]:
         # AL series might need ordered data
         req_ssot = "both" if eid.startswith("AL") else "sorted"
         
-        # Instantiate actual engine if available, else Stub
-        # For now, all are stubs as per instruction to build scaffolding first
-        # unless specific logic is requested.
-        # User said "Do NOT modify engine scoring logic yet", so Stubs are appropriate
-        # for preserving the interface.
-        
-        engines.append(StubEngine(eid, required_ssot=req_ssot))
+        # Instantiate actual engine if available
+        if eid == "NT-LL":
+            # Duck-typing or wrapper if necessary, but for now we follow analyze() interface in scripts
+            # In a real OO system, we'd wrap it in an Engine class.
+            from .nt_ll import analyze as analyze_ll
+            # For registry consistency, we might keep it as a partial or callable
+            engines.append(analyze_ll) 
+        else:
+            engines.append(StubEngine(eid, required_ssot=req_ssot))
         
     return engines
