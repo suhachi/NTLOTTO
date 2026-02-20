@@ -24,12 +24,30 @@ def analyze(df_sorted: pd.DataFrame, round_r: int, *, k_eval: int = 20, k_pool: 
     base_scores = {item['n']: item['score'] for item in nto_result['scores']}
     
     # 2. Omega specific adjustments (e.g., historical hits momentum)
-    # Omega can maintain a small internal momentum or just pass through NTO if it's purely a selector
+    # Omega must NOT just pass through NTO if it's purely a selector, to avoid 100% Jaccard overlap.
+    # Add an independent short-term momentum factor (last 10 rounds frequency).
+    
+    df_past = df_sorted[df_sorted['round'] < round_r].tail(10)
+    freq_map = {1:0} # Fallback
+    if not df_past.empty:
+        vals = df_past[['n1', 'n2', 'n3', 'n4', 'n5', 'n6']].values.flatten()
+        freq_map = pd.Series(vals).value_counts().to_dict()
+        
+    f_max = max(freq_map.values()) if freq_map else 1.0
+    f_max = f_max if f_max > 0 else 1.0
+    
     omega_scores = {}
+    evidence_map = {}
+    
     for n in range(1, 46):
-        # Default pass-through in this implementation
-        # The true power of Omega is selecting the final combinations, which is excluded from this scope.
-        omega_scores[n] = float(base_scores.get(n, 0.5))
+        b_score = float(base_scores.get(n, 0.0))
+        freq = freq_map.get(n, 0.0)
+        norm_freq = freq / f_max
+        
+        # Apply lambda factor to momentum (e.g., 0.15)
+        adj = 0.15 * norm_freq
+        omega_scores[n] = b_score + adj
+        evidence_map[n] = f"NTO Base({b_score:.3f}) + Momentum({adj:.3f})"
         
     # 3. Format Output
     results = []
@@ -37,7 +55,7 @@ def analyze(df_sorted: pd.DataFrame, round_r: int, *, k_eval: int = 20, k_pool: 
         results.append({
             "n": n,
             "score": omega_scores[n],
-            "evidence": ["Omega base score matched from NTO"]
+            "evidence": [evidence_map[n]]
         })
         
     results.sort(key=lambda x: (-x['score'], x['n']))
