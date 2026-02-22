@@ -11,8 +11,8 @@ from ntlotto.engines.omega import EngineOmega
 from ntlotto.engines.vpa1 import EngineVPA1
 from ntlotto.engines.ll import EngineLL
 from ntlotto.engines.pat import EnginePAT
-from ntlotto.predict.candidate_pools import build_candidate_pools
-from ntlotto.predict.generate_combos import generate_predictions
+from ntlotto.predict.candidate_pools import build_all_candidate_pools
+# from ntlotto.predict.generate_combos import generate_predictions (더 이상 사용 안 함)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -36,17 +36,8 @@ def main():
     df_s = df_s[df_s["round"] < args.round]
     df_o = df_o[df_o["round"] < args.round]
     
-    engines = {
-        "NT4": EngineNT4(),
-        "NT5": EngineNT5(),
-        "NTO": EngineNTO(),
-        "NT-Ω": EngineOmega(),
-        "NT-VPA-1": EngineVPA1(),
-        "NT-LL": EngineLL(),
-        "NT-PAT": EnginePAT()
-    }
-    
-    pools = build_candidate_pools(engines, df_s, df_o)
+    # shares 계산을 위해 기준값 유지
+
     
     # 쿼터 분배
     shares = {
@@ -61,11 +52,33 @@ def main():
     diff = args.n - sum(shares.values())
     shares["NTO"] += diff
     
-    out_dir = str(base_dir / args.outdir)
+    # Selection JSON 보강 (SSOT 경로 자동 삽입)
+    sel_path = base_dir / "docs/reports/latest/ENGINE_SELECTION_TEMPLATE.json"
+    if sel_path.exists():
+        sel_data = json.loads(sel_path.read_text(encoding="utf-8"))
+        sel_data["ssot_sorted_path"] = s_path
+        sel_data["round"] = args.round
+        sel_data["M"] = args.n
+        # 쿼터 적용 (shares 이미 계산됨)
+        # engine_selection 포맷 대응
+        if "engine_selection" in sel_data:
+            for k, q in shares.items():
+                if k in sel_data["engine_selection"]:
+                    sel_data["engine_selection"][k]["quota"] = q
+                    sel_data["engine_selection"][k]["use"] = True
+        sel_path.write_text(json.dumps(sel_data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    out_md = str(base_dir / f"docs/reports/latest/Prediction_Set_R{args.round}_M{args.n}.md")
+    out_csv = str(base_dir / f"docs/reports/latest/NTUC_{args.round}_M{args.n}_combos.csv")
+    
     try:
-        generate_predictions(args.round, args.n, pools, shares, out_dir, args.i_understand_and_allow_generation)
+        from ntlotto.predict.generate_combos import generate_from_selection
+        res = generate_from_selection(str(sel_path), out_md, out_csv)
+        print(f"[*] 글로벌 조합 M={res['M']} 생성 통과. (Actual: {res['engine_actual']})")
     except Exception as e:
         print(f"[FAIL] {e}")
+        import traceback
+        traceback.print_exc()
         
 if __name__ == "__main__":
     main()
