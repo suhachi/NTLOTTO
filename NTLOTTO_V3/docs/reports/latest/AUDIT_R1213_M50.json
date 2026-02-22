@@ -1,0 +1,59 @@
+{
+  "conclusion": "FAIL",
+  "timestamp": "2026-02-22T20:41:59.639171",
+  "round": 1213,
+  "metrics": {
+    "actual_max_overlap": 3,
+    "overlap_4_count": 0,
+    "ev_combo_count": 7,
+    "max_freq": 8,
+    "freq_cap": 8,
+    "max_jaccard": 0.3333333333333333,
+    "fallback_count": 32,
+    "engine_distribution": {
+      "NTO": 5,
+      "NT4": 4,
+      "NT-LL": 4,
+      "NT5": 2,
+      "NT-Ω": 3,
+      "RandomFallback": 32
+    }
+  },
+  "checks": [
+    {
+      "id": "SSOT_INTEGRITY",
+      "status": "PASS",
+      "reason": "Rows=606"
+    },
+    {
+      "id": "M_TARGET",
+      "status": "PASS",
+      "reason": "Generated=50"
+    },
+    {
+      "id": "HARD_OVERLAP_4+",
+      "status": "PASS",
+      "reason": "0 count"
+    },
+    {
+      "id": "EV_SLOT_CAP",
+      "status": "FAIL",
+      "reason": "Used=7 > 5"
+    },
+    {
+      "id": "FREQ_CAP",
+      "status": "PASS",
+      "reason": "8 <= 8"
+    },
+    {
+      "id": "FALLBACK_LIMIT",
+      "status": "FAIL",
+      "reason": "32 > 5"
+    },
+    {
+      "id": "ENGINE_STRATEGY",
+      "status": "PASS",
+      "reason": "Strategy file present"
+    }
+  ]
+}

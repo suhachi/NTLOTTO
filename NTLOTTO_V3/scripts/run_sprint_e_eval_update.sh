@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+echo "=========================================="
+echo "NTLOTTO v3: Sprint E (엔진 평가 및 가중치 업데이트)"
+echo "=========================================="
+echo "과거 N회차 성과를 평가하여 recall 값에 따라 전략 및 엔진의 Weight를 보수적으로 업데이트합니다."
+echo ""
+echo "실행 단계:"
+echo "1) 엔진 평가 (K=20, N=100 기준)"
+echo "python -m ntlotto.cli.eval_k_cli --k 20 --n 100"
+echo ""
+echo "2) 가중치 계산 (앞서 생성된 JSON 결과 사용)"
+echo "python -m ntlotto.cli.update_weights_cli --eval_json docs/reports/latest/Engine_Eval_K20_N100.json"
+echo "=========================================="

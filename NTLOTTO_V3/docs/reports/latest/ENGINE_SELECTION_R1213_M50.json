@@ -1,0 +1,42 @@
+{
+  "round": 1213,
+  "M": 50,
+  "seed": 20260222,
+  "ssot_sorted_path": "data/ssot_sorted.csv",
+  "engines": {
+    "NT4": {
+      "enabled": true,
+      "quota": 10
+    },
+    "NT5": {
+      "enabled": true,
+      "quota": 10
+    },
+    "NTO": {
+      "enabled": true,
+      "quota": 15
+    },
+    "NT-Ω": {
+      "enabled": true,
+      "quota": 5
+    },
+    "NT-VPA-1": {
+      "enabled": true,
+      "quota": 5
+    },
+    "NT-LL": {
+      "enabled": true,
+      "quota": 5
+    },
+    "NT-PAT": {
+      "enabled": false,
+      "quota": 0
+    }
+  },
+  "constitution": {
+    "p_max": 0.2,
+    "ev_slots_max": 5,
+    "fallback_max": 5,
+    "oversample_factor": 200
+  }
+}

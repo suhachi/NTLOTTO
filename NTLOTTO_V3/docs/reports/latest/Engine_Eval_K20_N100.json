@@ -1,0 +1,32 @@
+{
+  "NT4": {
+    "recall_mean": 0.4583333333333333,
+    "bonus_hit_rate": 0.38,
+    "mean_hits": 2.75
+  },
+  "NT5": {
+    "recall_mean": 0.4283333333333333,
+    "bonus_hit_rate": 0.38,
+    "mean_hits": 2.57
+  },
+  "NTO": {
+    "recall_mean": 0.43333333333333335,
+    "bonus_hit_rate": 0.43,
+    "mean_hits": 2.6
+  },
+  "NT-Ω": {
+    "recall_mean": 0.47500000000000003,
+    "bonus_hit_rate": 0.44,
+    "mean_hits": 2.85
+  },
+  "NT-VPA-1": {
+    "recall_mean": 0.4583333333333333,
+    "bonus_hit_rate": 0.44,
+    "mean_hits": 2.75
+  },
+  "NT-LL": {
+    "recall_mean": 0.4583333333333333,
+    "bonus_hit_rate": 0.44,
+    "mean_hits": 2.75
+  }
+}

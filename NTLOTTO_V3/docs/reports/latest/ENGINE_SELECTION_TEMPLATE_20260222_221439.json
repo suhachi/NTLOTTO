@@ -1,0 +1,44 @@
+{
+  "engine_selection": {
+    "NT4": {
+      "use": true,
+      "weight": 1.0,
+      "max_combos": 5
+    },
+    "NT5": {
+      "use": true,
+      "weight": 1.0,
+      "max_combos": 5
+    },
+    "NT-Ω": {
+      "use": true,
+      "weight": 1.0,
+      "max_combos": 5
+    },
+    "NTO": {
+      "use": true,
+      "weight": 1.0,
+      "max_combos": 5
+    },
+    "NT-PAT": {
+      "use": true,
+      "weight": 1.0,
+      "max_combos": 5
+    },
+    "NT-VPA-1": {
+      "use": true,
+      "weight": 1.0,
+      "max_combos": 5
+    },
+    "NT-LL": {
+      "use": true,
+      "weight": 1.0,
+      "max_combos": 5
+    }
+  },
+  "combo_generation_config": {
+    "status": "DISABLED_BY_DEFAULT",
+    "message": "Combination generation is not fully enabled. See README.md",
+    "allow_uniqueness_check": true
+  }
+}

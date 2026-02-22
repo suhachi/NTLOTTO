@@ -1,0 +1,26 @@
+{
+  "NT4": {
+    "weight": 1.2,
+    "recall_mean": 0.4583333333333333
+  },
+  "NT5": {
+    "weight": 1.2,
+    "recall_mean": 0.4283333333333333
+  },
+  "NTO": {
+    "weight": 1.2,
+    "recall_mean": 0.43333333333333335
+  },
+  "Omega": {
+    "weight": 1.2,
+    "recall_mean": 0.47500000000000003
+  },
+  "VPA1": {
+    "weight": 1.2,
+    "recall_mean": 0.4583333333333333
+  },
+  "LL": {
+    "weight": 1.2,
+    "recall_mean": 0.4583333333333333
+  }
+}
