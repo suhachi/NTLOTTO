@@ -16,7 +16,7 @@ def _require_allow():
 def generate_predictions(
     target_round: int,
     num_combos: int,
-    pools: dict[str, list[int]],
+    pools: dict[str, dict[int, float]],
     engine_shares: dict[str, int],
     out_dir: str,
     allow_flag: bool = False
@@ -26,33 +26,52 @@ def generate_predictions(
     _require_allow()
     ensure_dirs(out_dir)
     
-    # 1) 엔진별 후보 풀(Candidate Combos Pool) 생성 (넉넉히 quota의 6배)
+    # 1) 엔진별 후보 풀(Candidate Combos Pool) 생성
     candidate_pools = []
+    oversample_factor = 40
+    
+    # 결정론 유지
+    random.seed(target_round)
     
     for eng_name, quota in engine_shares.items():
         if quota <= 0: continue
-        pool = pools.get(eng_name, list(range(1, 46)))
-        needed = quota * 6
+        score_map = pools.get(eng_name)
+        if not score_map:
+            score_map = {n: 1.0 for n in range(1, 46)}
+            
+        total_score = sum(score_map.values())
+        if total_score <= 0:
+            nums = list(range(1, 46))
+            probs = [1.0/45.0]*45
+        else:
+            nums = list(score_map.keys())
+            probs = [score_map[n]/total_score for n in nums]
+            
+        needed = quota * oversample_factor
         attempts = 0
         success = 0
         eng_candidates = set()
         
-        while success < needed and attempts < needed * 50:
+        while success < needed and attempts < needed * 200:
             attempts += 1
-            if len(pool) < 6:
-                cand = tuple(sorted(random.sample(range(1, 46), 6)))
-            else:
-                cand = tuple(sorted(random.sample(pool, 6)))
-                
-            if cand not in eng_candidates:
-                eng_candidates.add(cand)
-                success += 1
-        
+            cand_nums = set()
+            inner_attempts = 0
+            while len(cand_nums) < 6 and inner_attempts < 100:
+                inner_attempts += 1
+                pick = random.choices(nums, weights=probs, k=1)[0]
+                cand_nums.add(pick)
+            if len(cand_nums) == 6:
+                cand = tuple(sorted(cand_nums))
+                if cand not in eng_candidates:
+                    eng_candidates.add(cand)
+                    success += 1
+                    
         for c in eng_candidates:
-            candidate_pools.append((c, eng_name))
+            c_score = sum(score_map.get(n, 0) for n in c)
+            candidate_pools.append((c_score, c, eng_name))
 
-    # 엔진 편향 방지를 위해 섞기 (실제론 점수 높은 순 정렬 방식을 쓸 수도 있으나, 여기선 랜덤 셔플)
-    random.shuffle(candidate_pools)
+    # 전역 선택기는 후보들을 점수 높은 순으로 정렬해 시도
+    candidate_pools.sort(key=lambda x: x[0], reverse=True)
     
     # 2) 글로벌 헌법 선택기
     selected_combos = []
@@ -60,33 +79,31 @@ def generate_predictions(
     ev_partners_log = []
     
     cap = frequency_cap(num_combos, 0.16)
+    ev_slots_max = 5
+    fallback_max = 5 
+    
     rule_state = {
         "ev_used": 0,
         "ev_members": set(),
         "counts": Counter(),
         "cap": cap,
         "max_jaccard_seen": 0.0,
-        "max_overlap_seen": 0
+        "max_overlap_seen": 0,
+        "ev_slots_max": ev_slots_max
     }
 
     reject_reasons = Counter()
 
-    for cand, eng_name in candidate_pools:
+    for score, cand, eng_name in candidate_pools:
         if cand in selected_combos:
             continue
             
         ok, reason = can_add_combo(cand, selected_combos, rule_state)
         if ok:
-            is_ev = False
             for ec in selected_combos:
                 if overlap_count(cand, ec) == 3:
-                    is_ev = True
-                    rule_state["ev_members"].add(cand)
-                    rule_state["ev_members"].add(ec)
                     ev_partners_log.append((cand, ec))
-            if is_ev:
-                rule_state["ev_used"] += 1
-                
+            
             selected_combos.append(cand)
             selected_meta.append((cand, eng_name))
             rule_state["counts"].update(cand)
@@ -96,28 +113,31 @@ def generate_predictions(
         else:
             reject_reasons[reason] += 1
 
-    # 부족할 경우 (random fallback)
-    attempts = 0
-    while len(selected_combos) < num_combos and attempts < num_combos * 500:
-        attempts += 1
-        cand = tuple(sorted(random.sample(range(1, 46), 6)))
-        if cand in selected_combos: continue
+    # 부족할 경우 (random fallback) - fallback_max까지만
+    if len(selected_combos) < num_combos:
+        needed_fallback = num_combos - len(selected_combos)
+        if needed_fallback > fallback_max:
+            print(f"[FAIL] 헌법 병목으로 인해 엔진 조합이 부족합니다. (필요 fallback {needed_fallback} > 최대 {fallback_max})")
+            print("=== Reject Reason 카운트 ===")
+            for r, c in reject_reasons.most_common():
+                print(f" - {r}: {c}")
+            raise RuntimeError(f"조합 선발 실패: 헌법 통과 조합 부족. Fallback 한도({fallback_max}) 초과.")
         
-        ok, reason = can_add_combo(cand, selected_combos, rule_state)
-        if ok:
-            is_ev = False
-            for ec in selected_combos:
-                if overlap_count(cand, ec) == 3:
-                    is_ev = True
-                    rule_state["ev_members"].add(cand)
-                    rule_state["ev_members"].add(ec)
-                    ev_partners_log.append((cand, ec))
-            if is_ev:
-                rule_state["ev_used"] += 1
-                
-            selected_combos.append(cand)
-            selected_meta.append((cand, "RandomFallback"))
-            rule_state["counts"].update(cand)
+        attempts = 0
+        while len(selected_combos) < num_combos and attempts < num_combos * 500:
+            attempts += 1
+            cand = tuple(sorted(random.sample(range(1, 46), 6)))
+            if cand in selected_combos: continue
+            
+            ok, reason = can_add_combo(cand, selected_combos, rule_state)
+            if ok:
+                for ec in selected_combos:
+                    if overlap_count(cand, ec) == 3:
+                        ev_partners_log.append((cand, ec))
+                    
+                selected_combos.append(cand)
+                selected_meta.append((cand, "RandomFallback"))
+                rule_state["counts"].update(cand)
 
     # 결과 검증 및 통계 산출
     max_ov = 0
@@ -146,6 +166,10 @@ def generate_predictions(
         w.writerow(["round","n1","n2","n3","n4","n5","n6"])
         for c, _ in selected_meta:
             w.writerow([target_round] + list(c))
+
+    eng_actual = Counter(eng for _, eng in selected_meta)
+    fallback_count = eng_actual.get("RandomFallback", 0)
+    ev_combo_count = len(rule_state["ev_members"])
             
     md_lines = [
         f"# Prediction Set Round {target_round} (M={num_combos})",
@@ -154,13 +178,25 @@ def generate_predictions(
         "## 전역 헌법 통계 (Global Selection Stats)",
         f"- Target M: {num_combos}, Generated: {len(selected_combos)}",
         f"- Max Overlap (All Pairs): {max_ov} (보장 제한: 2, 단 EV 예외는 3)",
-        f"- EV Slots Used (Overlap=3): {rule_state['ev_used']} / 5 최대",
-        f"- Max Number Frequency: {max_cfq} (Frequency Cap: {cap})",
+        f"- EV Slots Used (조합 기준 ev_combo_count): {ev_combo_count} / {ev_slots_max} 최대",
+        f"- EV Pair Logs Count (쌍 기준): {len(ev_partners_log)}",
+        f"- Max Number Frequency: {max_cfq} / cap: {cap}",
         f"- Max Jaccard Seen: {max_jac:.3f}",
+        f"- RandomFallback Count: {fallback_count} / fallback_max: {fallback_max}",
         ""
     ]
     
-    md_lines.append("### 헌법 자체 검증 (Self-Verification)")
+    md_lines.append("### Engine Actual vs Quota")
+    for eng, quota in engine_shares.items():
+        actual = eng_actual.get(eng, 0)
+        md_lines.append(f"- {eng}: Quota {quota} -> Actual {actual}")
+    md_lines.append(f"- RandomFallback: {fallback_count}")
+        
+    md_lines.append("\n### Reject Reason Summary (Top 5)")
+    for r, c in reject_reasons.most_common(5):
+        md_lines.append(f"- {r}: {c}")
+        
+    md_lines.append("\n### 헌법 자체 검증 (Self-Verification)")
     md_lines.append(f"- Overlap >= 4 존재여부: {'PASS 기록 (0건)' if v_overlap_4 == 0 else f'FAIL ({v_overlap_4}건 발생)'}")
     md_lines.append(f"- Frequency 초과 위반: {'PASS 기록 (0건)' if v_freq_viol == 0 else f'FAIL ({v_freq_viol}건 발생)'}")
     if v_overlap_4 == 0 and v_freq_viol == 0 and len(selected_combos) == num_combos:
