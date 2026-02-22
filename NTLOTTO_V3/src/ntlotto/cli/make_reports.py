@@ -12,6 +12,7 @@ from ntlotto.reports.ssot_validation_report import build_validation_report
 # reports
 from ntlotto.reports.why_long import build_why_long
 from ntlotto.reports.why_short import build_why_short
+from ntlotto.contracts.report_contract import assert_report_sections, WHY_LONG_SECTIONS, WHY_SHORT_SECTIONS
 from ntlotto.reports.engine_nt4 import build_eng_nt4
 from ntlotto.reports.engine_nt5 import build_eng_nt5
 from ntlotto.reports.engine_omega import build_eng_omega
@@ -85,8 +86,21 @@ def main():
     w_shorts = [int(x.strip()) for x in args.short.split(",")]
     wm = window_map(df_s, w_shorts)
     
-    _save("WHY_Long.md", build_why_long(df_s, df_o, args.long))
-    _save("WHY_Short.md", build_why_short(wm, df_o))
+    why_long_body = build_why_long(df_s, df_o, args.long)
+    try:
+        assert_report_sections(why_long_body, WHY_LONG_SECTIONS, "WHY_Long")
+    except ValueError as e:
+        print(f"[FAIL] {e}")
+        sys.exit(1)
+    _save("WHY_Long.md", why_long_body)
+
+    why_short_body = build_why_short(wm, df_o)
+    try:
+        assert_report_sections(why_short_body, WHY_SHORT_SECTIONS, "WHY_Short")
+    except ValueError as e:
+        print(f"[FAIL] {e}")
+        sys.exit(1)
+    _save("WHY_Short.md", why_short_body)
 
     _save("Engine_NT4.md", build_eng_nt4(df_s, df_o))
     _save("Engine_NT5.md", build_eng_nt5(df_s, df_o))

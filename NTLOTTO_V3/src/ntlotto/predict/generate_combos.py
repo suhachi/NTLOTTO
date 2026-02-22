@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
 
 from ntlotto.core.report_writer import write_text
+from ntlotto.contracts.engine_contract import assert_engine_keys_map
+from ntlotto.contracts.constitution_contract import assert_constitution
 from ntlotto.predict.constitution import (
     overlap_count,
     compute_new_ev_set_size,
@@ -83,16 +85,20 @@ def generate_from_selection(
     seed = int(sel.get("seed", 0))
 
     constitution = sel.get("constitution", {})
-    p_max = float(constitution.get("p_max", 0.16))
+    p_max = float(constitution.get("p_max", 0.20))
     ev_slots_max = int(constitution.get("ev_slots_max", 5))
     fallback_max = int(constitution.get("fallback_max", 5))
-    oversample_factor = int(constitution.get("oversample_factor", 200))
+    oversample_factor = int(constitution.get("oversample_factor", 1000))
 
     engines_cfg = sel.get("engines", sel.get("engine_selection", {}))
     quotas: Dict[str, int] = {}
     for k,v in engines_cfg.items():
         if v.get("enabled", v.get("use", False)) and int(v.get("quota", 0)) > 0:
             quotas[k] = int(v["quota"])
+
+    # Contract Verification (FAIL-FAST)
+    assert_constitution(constitution)
+    assert_engine_keys_map({k:1 for k in quotas.keys()})
 
     # LOAD SSOT
     ssot_sorted_path = sel.get("ssot_sorted_path", "data/ssot_sorted.csv")
@@ -130,7 +136,7 @@ def generate_from_selection(
         pool = pools.get(eng, [])
         pool_with_jitter = []
         for cand in pool:
-            jitter = rng_global.random() * 0.001
+            jitter = rng_global.random() * 0.5
             pool_with_jitter.append((cand.score + jitter, cand))
         pool_with_jitter.sort(key=lambda x: -x[0])
         

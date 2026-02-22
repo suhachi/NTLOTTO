@@ -51,14 +51,14 @@ def build_candidate_pool_for_engine(
     pool: List[CandidateCombo] = []
     seen = set()
 
-    # 분산 전략: 
-    # 50%: Original Weights (Hard)
+    # 분산 전략 보완 (통과 확률 극대화): 
+    # 20%: Original Weights (Hard)
     # 30%: Sqrt Weights (Soft)
-    # 20%: Uniform Weights (Flexible)
+    # 50%: Uniform Weights (Flexible)
     strategies = [
-        (1.0, int(target_count * 0.5)),
+        (1.0, int(target_count * 0.2)),
         (0.5, int(target_count * 0.3)),
-        (0.0, int(target_count * 0.2) + (target_count - int(target_count * 0.5) - int(target_count * 0.3)))
+        (0.0, target_count - int(target_count * 0.2) - int(target_count * 0.3))
     ]
 
     for power, count in strategies:
