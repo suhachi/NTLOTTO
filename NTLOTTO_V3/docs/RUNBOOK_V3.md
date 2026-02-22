@@ -33,7 +33,7 @@ NT4 10 / NT5 10 / NTO 15 / NT-Ω 5 / NT-VPA-1 5 / NT-LL 5 / NT-PAT 0
 
 ### 명령(고정)
 ```bash
-python -m ntlotto.cli.set_strategy_cli --round 1213 --M 50 --seed 20260222 --p_max 0.16 --ev_slots_max 5 --fallback_max 5 \
+python -m ntlotto.cli.set_strategy_cli --round 1213 --M 50 --seed 20260222 --p_max 0.16 --ev_slots_max 5 --fallback_max 5 --oversample_factor 40 \
   --text "NT4 10 / NT5 10 / NTO 15 / NT-Ω 5 / NT-VPA-1 5 / NT-LL 5 / NT-PAT 0"
 ```
 ### 산출물(고정)
@@ -81,4 +81,4 @@ python -m ntlotto.cli.update_weights_cli --eval docs/reports/latest/Engine_Eval_
 ## 운영 원칙(강제)
 - WHY→전략→예측 레이어를 섞으면 FAIL
 - 전략(quota)은 예측 결과에 100% 반영되어야 한다(Actual==Quota)
-- 헌법(중복/쏠림)은 전역 적용, 위반 시 FAIL
+- 헌법(중복/쏠림)은 전역 적용, 위반 시 FAIL (p_max 기본 0.16, 권장 범위 0.14~0.18)
