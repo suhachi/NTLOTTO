@@ -72,7 +72,7 @@ python -m ntlotto.cli.score_round_cli --round 1213 --combos docs/reports/latest/
 ## 5) 학습/반영(엔진 평가/가중치 업데이트)
 (선택) 엔진 성과를 번호단위로 평가하고, 다음 회차 전략 참고 자료 생성.
 ```bash
-python -m ntlotto.cli.eval_k_cli --K 20 --N 100
+python -m ntlotto.cli.eval_k_cli --k 20 --n 100
 python -m ntlotto.cli.update_weights_cli --eval docs/reports/latest/Engine_Eval_K20_N100.json
 ```
 
@@ -82,3 +82,14 @@ python -m ntlotto.cli.update_weights_cli --eval docs/reports/latest/Engine_Eval_
 - WHY→전략→예측 레이어를 섞으면 FAIL
 - 전략(quota)은 예측 결과에 100% 반영되어야 한다(Actual==Quota)
 - 헌법(중복/쏠림)은 전역 적용, 위반 시 FAIL (p_max 기본 0.16, 권장 범위 0.14~0.18)
+
+---
+
+## (추가) 한국어 1문장 명령(운영 봇)
+```bash
+python -m ntlotto.bot.krflow --say "1212회차까지 데이터들을 분석/학습해"
+python -m ntlotto.bot.krflow --say "리포터를 작성해"
+export ALLOW_COMBO_GENERATION=1
+python -m ntlotto.bot.krflow --say "NT4 10 / NT5 10 / NTO 15 / NT-Ω 5 / NT-VPA-1 5 / NT-LL 5 / NT-PAT 0 로 생성해"
+python -m ntlotto.bot.krflow --say "당첨번호 8 25 44 31 5 41 보너스 45 채점해"
+```

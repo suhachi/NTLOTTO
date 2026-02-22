@@ -52,6 +52,7 @@ def main():
         print(f"[FAIL] {e}")
         import traceback
         traceback.print_exc()
+        sys.exit(1)
         
 if __name__ == "__main__":
     main()

@@ -10,6 +10,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--round", type=int, required=True, help="Target round to score")
     parser.add_argument("--combos", type=str, required=True, help="CSV path of combinations")
+    parser.add_argument("--ordered", type=str, required=False, help="Draw ordered numbers (e.g. '8 25 44 31 5 41')")
+    parser.add_argument("--bonus", type=int, required=False, help="Bonus number")
     parser.add_argument("--outdir", type=str, default="docs/reports/latest")
 
     args = parser.parse_args()
